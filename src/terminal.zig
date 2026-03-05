@@ -4,6 +4,7 @@ const folio = @import("folio");
 const runner_mod = folio.runner;
 
 const RenderTarget = runner_mod.RenderTarget;
+const RunnerState = runner_mod.RunnerState;
 
 // ── Raw mode ──
 
@@ -93,3 +94,69 @@ pub const TerminalTarget = struct {
         _ = posix.write(posix.STDOUT_FILENO, "\x1b[0m\r\n") catch 0;
     }
 };
+
+// ── Compile error display ──
+
+pub fn printCompileErrors(errors: *const folio.programme.CompileErrors, writer: std.io.AnyWriter) void {
+    for (errors.items) |node_err| {
+        for (node_err.errors) |script_err| {
+            writer.print("folio: [{s} beat {d} node {d}] {s}\n", .{
+                node_err.scene,
+                node_err.beat_index,
+                node_err.node_index,
+                script_err.message,
+            }) catch {};
+        }
+    }
+}
+
+// ── Run loop ──
+
+pub fn runLoop(folio_session: *folio.FolioSession, is_terminal: bool) void {
+    var timer = std.time.Timer.start() catch return;
+    var waiting_prompt_shown = false;
+
+    while (folio_session.getState() != .done) {
+        const delta_ns = timer.lap();
+        const delta_ms = @as(f64, @floatFromInt(delta_ns)) / 1_000_000.0;
+        _ = folio_session.advance(delta_ms);
+
+        if (folio_session.getState() == .waiting and !waiting_prompt_shown) {
+            _ = posix.write(posix.STDOUT_FILENO, "\r\n\u{25b6} ") catch 0;
+            waiting_prompt_shown = true;
+        }
+
+        if (!is_terminal) {
+            if (folio_session.getState() == .waiting) {
+                waiting_prompt_shown = false;
+                folio_session.confirm();
+            }
+            continue;
+        }
+
+        var fds = [1]posix.pollfd{.{
+            .fd = posix.STDIN_FILENO,
+            .events = posix.POLL.IN,
+            .revents = 0,
+        }};
+        _ = posix.poll(&fds, 16) catch continue;
+        if (fds[0].revents & posix.POLL.IN == 0) continue;
+
+        var byte: u8 = undefined;
+        const n = posix.read(posix.STDIN_FILENO, (&byte)[0..1]) catch break;
+        if (n == 0) continue;
+
+        switch (byte) {
+            '\r', ' ' => {
+                if (folio_session.getState() == .waiting) {
+                    waiting_prompt_shown = false;
+                    folio_session.confirm();
+                } else if (folio_session.getState() == .emitting) {
+                    folio_session.confirm();
+                }
+            },
+            'q', 0x03 => break,
+            else => {},
+        }
+    }
+}

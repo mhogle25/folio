@@ -130,25 +130,14 @@ your_module.addImport("folio", folio_mod);
 
 ## Usage
 
-### Loading and Compiling a Script
+### Compiling a Script
+
+`compileFile` and `compileSource` collapse tokenize → parse → compile into a single call:
 
 ```zig
 const folio = @import("folio");
 
-// Read source text
-const source = try std.fs.cwd().readFileAlloc(allocator, "scene.folio", 1024 * 1024);
-defer allocator.free(source);
-
-// Tokenize and parse into a Script (raw AST)
-const tokens = try folio.lexer.tokenize(source, allocator);
-defer allocator.free(tokens);
-
-var script = try folio.parser.parse(tokens, allocator);
-defer script.deinit();
-
-// Compile into an executable Programme
-var compile_result = try folio.programme.compile(&script, allocator);
-// script can be deinited after compile — Programme is fully independent
+var compile_result = try folio.compileFile("scene.folio", allocator);
 
 var prog = switch (compile_result) {
     .ok => |p| p,
@@ -167,24 +156,26 @@ var prog = switch (compile_result) {
 defer prog.deinit();
 ```
 
-### Runner Integration
+Use `compileSource` if you already have the source text in memory:
 
-The `Runner` drives a compiled `Programme` through a `RenderTarget` interface. Implement `RenderTarget.Vtable` to connect folio output to your renderer or UI system.
+```zig
+var compile_result = try folio.compileSource(source_text, allocator);
+```
+
+### Session Integration
+
+`FolioSession` is the primary integration point. It owns the registry and runner, registers all built-in ops automatically, and exposes a simple frame-driven API.
 
 ```zig
 const folio = @import("folio");
-const lish = @import("lish");
-
-const Runner = folio.runner.Runner;
-const RenderTarget = folio.runner.RenderTarget;
 
 // 1. Implement RenderTarget.Vtable
 const MyTarget = struct {
-    fn renderTarget(self: *MyTarget) RenderTarget {
+    fn renderTarget(self: *MyTarget) folio.runner.RenderTarget {
         return .{ .context = self, .vtable = &vtable };
     }
 
-    const vtable = RenderTarget.Vtable{
+    const vtable = folio.runner.RenderTarget.Vtable{
         .appendChar = appendChar,
         .appendText = appendText,
         .clear = clear,
@@ -217,13 +208,47 @@ const MyTarget = struct {
     }
 };
 
-// 2. Set up registry and runner
+// 2. Create session — builtins and folio ops registered automatically
+var my_target = MyTarget{};
+const session = try folio.FolioSession.init(&prog, my_target.renderTarget(), .{}, allocator);
+defer session.deinit();
+
+// 3. Load a scene and drive the loop
+_ = session.loadScene("main");
+
+// Call advance() every frame with elapsed time in milliseconds
+const state = session.advance(delta_ms);
+
+// When state is .waiting, show a prompt and wait for the player
+if (state == .waiting) {
+    session.confirm();
+}
+```
+
+Pass `FolioSessionConfig` to customise the session:
+
+```zig
+const session = try folio.FolioSession.init(&prog, my_target.renderTarget(), .{
+    .runner_config = .{ .chars_per_sec = 30.0, .confirm_skips = false },
+    .scope = &my_scope,
+    .fragments = &.{ my_ops.registerAll },
+}, allocator);
+```
+
+### Advanced: Manual Runner Setup
+
+For hosts that need full control over the registry (e.g. multiple independent runners, custom op sets), you can construct the `Runner` directly:
+
+```zig
+const lish = @import("lish");
+const folio = @import("folio");
+
 var registry = lish.Registry{};
 defer registry.deinit(allocator);
 try lish.builtins.registerAll(&registry, allocator);
 
 var my_target = MyTarget{};
-var runner = Runner.init(
+var runner = folio.runner.Runner.init(
     &prog,
     &registry,
     &lish.Scope.EMPTY,
@@ -233,20 +258,8 @@ var runner = Runner.init(
 );
 defer runner.deinit();
 
-// Register folio's built-in ops (instant, speed, delay, scene, skip, continue, clear)
 try folio.ops.registerAll(&registry, &runner, allocator);
-
-// 3. Load a scene and drive the loop
 _ = runner.loadScene("main");
-
-// Call advance() every frame with the elapsed time in milliseconds
-const state = runner.advance(delta_ms);
-
-// When state is .waiting, show a prompt and wait for the player
-if (state == .waiting) {
-    // player presses confirm...
-    runner.confirm();
-}
 ```
 
 ### Runner State Machine
@@ -331,7 +344,7 @@ var runner = Runner.init(&prog, &registry, &scope, target, .{}, allocator);
 
 In the script:
 ```
-Hello, #{ identity :playerName }.
+Hello, #{ proc :playerName }.
 ```
 
 ## Terminal Player
@@ -372,7 +385,7 @@ zig build
 
 | File | Purpose |
 |------|---------|
-| `root.zig` | Public API re-exports |
+| `root.zig` | Public API — re-exports, `compileSource`, `compileFile` |
 | `token.zig` | Token types and syntax constants |
 | `lexer.zig` | Tokenizer — converts folio source to tokens |
 | `node.zig` | AST node types: `Script`, `Scene`, `Beat`, `Node` |
@@ -380,6 +393,7 @@ zig build
 | `programme.zig` | Compiles a `Script` into an executable `Programme` |
 | `runner.zig` | Drives a `Programme` via `RenderTarget`; typewriter, beats, deferred ops |
 | `ops.zig` | folio built-in lish operations (instant, ffwd, speed, delay, scene, skip, continue, clear, end) |
+| `session.zig` | `FolioSession` — heap-allocated session owning registry and runner |
 | `main.zig` | Terminal player entry point |
 
 ## License
