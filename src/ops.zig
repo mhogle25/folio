@@ -9,11 +9,15 @@ const Operation = lish.Operation;
 const Registry = lish.Registry;
 const Runner = runner_mod.Runner;
 
-const op_instant = "instant";
-const op_ffwd = "ffwd";
-const op_speed = "speed";
-const op_delay = "delay";
-const op_scene = "scene";
+const op_instant  = "instant";
+const op_ffwd     = "ffwd";
+const op_speed    = "speed";
+const op_delay    = "delay";
+const op_scene    = "scene";
+const op_skip     = "skip";
+const op_continue = "continue";
+const op_clear    = "clear";
+const op_end      = "end";
 
 /// Register all folio runner ops into the given registry, bound to the given runner.
 pub fn registerAll(registry: *Registry, runner: *Runner, allocator: Allocator) Allocator.Error!void {
@@ -22,10 +26,10 @@ pub fn registerAll(registry: *Registry, runner: *Runner, allocator: Allocator) A
     try registry.registerOperation(allocator, op_speed, Operation.fromBoundFn(Runner, speedOp, runner));
     try registry.registerOperation(allocator, op_delay, Operation.fromBoundFn(Runner, delayOp, runner));
     try registry.registerOperation(allocator, op_scene, Operation.fromBoundFn(Runner, sceneOp, runner));
-    try registry.registerOperation(allocator, "skip", Operation.fromBoundFn(Runner, skipOp, runner));
-    try registry.registerOperation(allocator, "continue", Operation.fromBoundFn(Runner, continueOp, runner));
-    try registry.registerOperation(allocator, "clear", Operation.fromBoundFn(Runner, clearOp, runner));
-    try registry.registerOperation(allocator, "end", Operation.fromBoundFn(Runner, endOp, runner));
+    try registry.registerOperation(allocator, op_skip, Operation.fromBoundFn(Runner, skipOp, runner));
+    try registry.registerOperation(allocator, op_continue, Operation.fromBoundFn(Runner, continueOp, runner));
+    try registry.registerOperation(allocator, op_clear, Operation.fromBoundFn(Runner, clearOp, runner));
+    try registry.registerOperation(allocator, op_end, Operation.fromBoundFn(Runner, endOp, runner));
 }
 
 // ── Ops ──

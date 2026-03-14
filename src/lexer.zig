@@ -183,15 +183,15 @@ const Lexer = struct {
         var depth: u32 = 1;
         while (self.pos < self.source.len) {
             switch (self.source[self.pos]) {
-                '"', '\'' => |quote| {
+                tok.QUOTE_DOUBLE, tok.QUOTE_SINGLE => |quote| {
                     self.pos += 1;
                     try self.skipQuotedContent(quote);
                 },
-                '{' => {
+                tok.BLOCK_OPEN => {
                     depth += 1;
                     self.pos += 1;
                 },
-                '}' => {
+                tok.BLOCK_CLOSE => {
                     depth -= 1;
                     if (depth == 0) {
                         const content = std.mem.trim(u8, self.source[start..self.pos], " \t\r\n");
