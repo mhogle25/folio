@@ -32,4 +32,5 @@ pub const QUOTE_SINGLE = '\'';
 pub const BACKSLASH = '\\';
 pub const NEWLINE = '\n';
 pub const CARRIAGE_RETURN = '\r';
+pub const COMMENT = "//";
 

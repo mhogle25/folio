@@ -56,9 +56,9 @@ const Lexer = struct {
 
         if (self.at_line_start) {
             // // comment: consume the line (including its newline) and retry.
-            if (ch == '/' and self.peekAt(1) == '/') {
-                self.pos += 2;
-                self.col += 2;
+            if (ch == tok.COMMENT[0] and self.peekAt(1) == tok.COMMENT[1]) {
+                self.pos += tok.COMMENT.len;
+                self.col += tok.COMMENT.len;
                 self.skipToNewline();
                 if (self.pos < self.source.len and self.source[self.pos] == tok.NEWLINE) {
                     self.pos += 1;
