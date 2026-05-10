@@ -24,8 +24,8 @@ pub fn compileSource(source: []const u8, allocator: std.mem.Allocator) !programm
 
 /// Read a file and compile it as a folio script.
 /// Returns a `CompileResult` — call `.ok.deinit()` or `.err.deinit()` when done.
-pub fn compileFile(path: []const u8, allocator: std.mem.Allocator) !programme.CompileResult {
-    const source = try std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024);
+pub fn compileFile(io: std.Io, path: []const u8, allocator: std.mem.Allocator) !programme.CompileResult {
+    const source = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024));
     defer allocator.free(source);
     return compileSource(source, allocator);
 }

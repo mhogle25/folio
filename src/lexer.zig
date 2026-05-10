@@ -32,7 +32,7 @@ const Lexer = struct {
     }
 
     fn scan(self: *Lexer, allocator: std.mem.Allocator) ![]Token {
-        var tokens: std.ArrayListUnmanaged(Token) = .{};
+        var tokens: std.ArrayListUnmanaged(Token) = .empty;
         errdefer tokens.deinit(allocator);
         while (true) {
             const next_tok = try self.next();
@@ -147,7 +147,7 @@ const Lexer = struct {
         while (self.pos < self.source.len and self.source[self.pos] != tok.NEWLINE) {
             self.pos += 1;
         }
-        const name = std.mem.trimRight(u8, self.source[name_start..self.pos], " \t\r");
+        const name = std.mem.trimEnd(u8, self.source[name_start..self.pos], " \t\r");
         if (name.len == 0) return error.EmptySceneName;
         if (self.pos < self.source.len and self.source[self.pos] == tok.NEWLINE) {
             self.pos += 1;

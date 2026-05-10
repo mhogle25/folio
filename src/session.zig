@@ -41,7 +41,7 @@ pub const FolioSession = struct {
 
         self.* = .{
             .programme = programme,
-            .registry = .{},
+            .registry = lish.Registry.init(allocator),
             .runner = undefined,
             .allocator = allocator,
         };

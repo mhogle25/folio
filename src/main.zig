@@ -1,41 +1,38 @@
 const std = @import("std");
-const posix = std.posix;
-const lish = @import("lish");
 const folio = @import("folio");
 const terminal_mod = @import("terminal.zig");
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+const posix = std.posix;
 
-    const stderr = lish.session.fdWriter(posix.STDERR_FILENO);
-    const stdout = lish.session.fdWriter(posix.STDOUT_FILENO);
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    const io = init.io;
+
+    var stdout_writer = std.Io.File.stdout().writer(io, &.{});
+    var stderr_writer = std.Io.File.stderr().writer(io, &.{});
+    const stdout = &stdout_writer.interface;
+    const stderr = &stderr_writer.interface;
 
     // ── Parse CLI args ──
 
-    const argv = std.os.argv;
+    var arg_iter = init.minimal.args.iterate();
+    _ = arg_iter.next(); // skip argv[0]
 
-    if (argv.len < 2) {
+    const script_path = arg_iter.next() orelse {
         stderr.writeAll("usage: folio <script.folio> [--scene <name>]\n") catch {};
         std.process.exit(1);
-    }
-
-    const script_path = std.mem.span(argv[1]);
+    };
     var scene_name: []const u8 = "main";
 
-    var arg_index: usize = 2;
-    while (arg_index < argv.len) : (arg_index += 1) {
-        const arg = std.mem.span(argv[arg_index]);
-        if (std.mem.eql(u8, arg, "--scene") and arg_index + 1 < argv.len) {
-            arg_index += 1;
-            scene_name = std.mem.span(argv[arg_index]);
+    while (arg_iter.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--scene")) {
+            scene_name = arg_iter.next() orelse break;
         }
     }
 
     // ── Load and compile script ──
 
-    var compile_result = folio.compileFile(script_path, allocator) catch |err| {
+    var compile_result = folio.compileFile(io, script_path, allocator) catch |err| {
         stderr.print("folio: error loading \"{s}\": {s}\n", .{ script_path, @errorName(err) }) catch {};
         std.process.exit(1);
     };
@@ -68,12 +65,12 @@ pub fn main() !void {
     // ── Enable raw mode ──
 
     const original_termios = terminal_mod.enableRawMode() catch {
-        terminal_mod.runLoop(folio_session, false);
+        terminal_mod.runLoop(io, folio_session, false);
         return;
     };
     defer terminal_mod.disableRawMode(original_termios);
 
-    terminal_mod.runLoop(folio_session, true);
+    terminal_mod.runLoop(io, folio_session, true);
 
-    _ = posix.write(posix.STDOUT_FILENO, "\r\n") catch 0;
+    stdout.writeAll("\r\n") catch {};
 }

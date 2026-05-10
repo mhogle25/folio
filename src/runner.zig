@@ -125,7 +125,7 @@ pub const Runner = struct {
             .config = config,
             .allocator = allocator,
             .eval_arena = std.heap.ArenaAllocator.init(allocator),
-            .deferred_queue = .{},
+            .deferred_queue = .empty,
             .runner_state = .done,
             .scene = &.{},
             .beat_index = 0,
@@ -378,7 +378,7 @@ pub const Runner = struct {
         // This keeps the list stable even if a command (e.g. scene op) calls
         // enterBeat() and clears self.deferred_queue mid-execution.
         var pending = self.deferred_queue;
-        self.deferred_queue = .{};
+        self.deferred_queue = .empty;
         defer pending.deinit(self.allocator);
 
         for (pending.items) |expr| {
@@ -438,7 +438,7 @@ pub const Runner = struct {
             .float => |f| std.fmt.allocPrint(allocator, "{d}", .{f}),
             .list => |items| blk: {
                 if (items.len == 0) break :blk "";
-                var buf: std.ArrayListUnmanaged(u8) = .{};
+                var buf: std.ArrayListUnmanaged(u8) = .empty;
                 var first = true;
                 for (items) |maybe_item| {
                     const item = maybe_item orelse continue;
@@ -484,7 +484,7 @@ const TestTarget = struct {
     error_log: std.ArrayListUnmanaged([]const u8),
 
     fn init(allocator: Allocator) TestTarget {
-        return .{ .allocator = allocator, .buffer = .{}, .clears = 0, .error_log = .{} };
+        return .{ .allocator = allocator, .buffer = .empty, .clears = 0, .error_log = .empty };
     }
 
     fn deinit(self: *TestTarget) void {
@@ -536,7 +536,7 @@ test "loadScene returns false for unknown scene" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
 
@@ -551,7 +551,7 @@ test "advance emits text character by character" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     // 1 char per second → ms_per_char = 1000ms; advance(1000) emits exactly 1 char
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
@@ -575,7 +575,7 @@ test "advance completes section and enters waiting state" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
 
@@ -594,7 +594,7 @@ test "instant_string emits all at once" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     // Very slow typewriter — instant_string should bypass it entirely
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 0.001 }, std.testing.allocator);
     defer runner.deinit();
@@ -614,7 +614,7 @@ test "char_string always typewriter even in instant_mode" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
 
@@ -640,7 +640,7 @@ test "confirm advances to next section and clears" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
 
@@ -664,7 +664,7 @@ test "confirm with confirm_skips flushes remaining text" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0, .confirm_skips = true }, std.testing.allocator);
     defer runner.deinit();
 
@@ -687,7 +687,7 @@ test "confirm without confirm_skips does not flush" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0, .confirm_skips = false }, std.testing.allocator);
     defer runner.deinit();
 
@@ -709,7 +709,7 @@ test "last section confirm results in done" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
 
@@ -744,7 +744,7 @@ test "lish_inline fires between preceding and following text" {
     defer target.deinit();
 
     var counter = FireCounter{};
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
     try registry.registerOperation(
         std.testing.allocator,
@@ -777,7 +777,7 @@ test "lish_inline at beat end fires when waiting state begins" {
     defer target.deinit();
 
     var counter = FireCounter{};
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
     try registry.registerOperation(
         std.testing.allocator,
@@ -803,7 +803,7 @@ test "lish_defer does not fire during advance, fires on confirm" {
     defer target.deinit();
 
     var counter = FireCounter{};
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
     try registry.registerOperation(
         std.testing.allocator,
@@ -835,7 +835,7 @@ test "lish_defer fires in declaration order" {
     defer target.deinit();
 
     var counter = FireCounter{};
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
     try registry.registerOperation(
         std.testing.allocator,
@@ -865,7 +865,7 @@ test "lish_inline runtime error is reported" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
     _ = runner.loadScene("main");
@@ -882,7 +882,7 @@ test "lish_defer runtime error is reported on confirm" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
     _ = runner.loadScene("main");
@@ -903,7 +903,7 @@ test "instant_lish runtime error is reported and output is empty" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
     _ = runner.loadScene("main");
@@ -926,7 +926,7 @@ test "ffwd with no args toggles confirm_skips" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .confirm_skips = true }, std.testing.allocator);
@@ -944,7 +944,7 @@ test "ffwd with $none disables confirm_skips" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
     try lish.builtins.registerAll(&registry, std.testing.allocator);
 
@@ -963,7 +963,7 @@ test "ffwd with truthy value enables confirm_skips" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
 
     var prog = try parseAndCompile("::main\n{ ffwd \"yes\" }", std.testing.allocator);
@@ -991,7 +991,7 @@ test "loadScene resets confirm_skips to configured default" {
     var target = TestTarget.init(std.testing.allocator);
     defer target.deinit();
 
-    var registry = lish.Registry{};
+    var registry = lish.Registry.init(std.testing.allocator);
     defer registry.deinit(std.testing.allocator);
     try lish.builtins.registerAll(&registry, std.testing.allocator);
 

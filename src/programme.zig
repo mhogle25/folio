@@ -71,7 +71,7 @@ pub fn compile(script: *const Script, allocator: std.mem.Allocator) !CompileResu
     errdefer arena.deinit();
     const alloc = arena.allocator();
 
-    var node_errors: std.ArrayListUnmanaged(NodeError) = .{};
+    var node_errors: std.ArrayListUnmanaged(NodeError) = .empty;
     var scenes: std.StringHashMapUnmanaged(ProgrammeScene) = .{};
 
     var scene_iter = script.scenes.iterator();
@@ -79,10 +79,10 @@ pub fn compile(script: *const Script, allocator: std.mem.Allocator) !CompileResu
         const scene_name = try alloc.dupe(u8, entry.key_ptr.*);
         const source_scene = entry.value_ptr.*;
 
-        var prog_beats: std.ArrayListUnmanaged(ProgrammeBeat) = .{};
+        var prog_beats: std.ArrayListUnmanaged(ProgrammeBeat) = .empty;
 
         for (source_scene, 0..) |source_beat, beat_idx| {
-            var prog_nodes: std.ArrayListUnmanaged(ProgrammeNode) = .{};
+            var prog_nodes: std.ArrayListUnmanaged(ProgrammeNode) = .empty;
 
             for (source_beat, 0..) |source_node, node_idx| {
                 if (try compileNode(alloc, source_node, scene_name, beat_idx, node_idx, &node_errors)) |prog_node| {
@@ -166,7 +166,7 @@ fn compileStringNode(
     node_index: usize,
     node_errors: *std.ArrayListUnmanaged(NodeError),
 ) !?[]const u8 {
-    var script_errors: std.ArrayListUnmanaged(ScriptError) = .{};
+    var script_errors: std.ArrayListUnmanaged(ScriptError) = .empty;
     const result = try processEscapes(alloc, raw, &script_errors);
     if (script_errors.items.len > 0) {
         try node_errors.append(alloc, .{

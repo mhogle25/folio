@@ -23,8 +23,8 @@ pub fn parse(tokens: []const Token, allocator: std.mem.Allocator) !Script {
 
     var scenes: std.StringHashMapUnmanaged(Scene) = .{};
     var current_name: ?[]const u8 = null;
-    var current_beats: std.ArrayListUnmanaged(Beat) = .{};
-    var current_nodes: std.ArrayListUnmanaged(Node) = .{};
+    var current_beats: std.ArrayListUnmanaged(Beat) = .empty;
+    var current_nodes: std.ArrayListUnmanaged(Node) = .empty;
 
     for (tokens) |token| {
         switch (token.token_type) {

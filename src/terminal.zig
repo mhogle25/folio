@@ -6,15 +6,21 @@ const runner_mod = folio.runner;
 const RenderTarget = runner_mod.RenderTarget;
 const RunnerState = runner_mod.RunnerState;
 
+// Raw syscall write to a fd. Used by signal handlers and render callbacks
+// that don't have access to a std.Io context.
+fn rawWrite(fd: posix.fd_t, bytes: []const u8) void {
+    _ = std.os.linux.write(fd, bytes.ptr, bytes.len);
+}
+
 // ── Raw mode ──
 
 var global_original_termios: ?posix.termios = null;
 
-fn sigintHandler(_: c_int) callconv(.c) void {
+fn sigintHandler(_: posix.SIG) callconv(.c) void {
     if (global_original_termios) |original| {
         posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, original) catch {};
     }
-    _ = posix.write(posix.STDOUT_FILENO, "\n") catch 0;
+    rawWrite(posix.STDOUT_FILENO, "\n");
     std.process.exit(130);
 }
 
@@ -66,38 +72,38 @@ pub const TerminalTarget = struct {
 
     fn appendChar(_: *anyopaque, char: u8) void {
         if (char == '\n') {
-            _ = posix.write(posix.STDOUT_FILENO, "\r\n") catch 0;
+            rawWrite(posix.STDOUT_FILENO, "\r\n");
         } else {
-            _ = posix.write(posix.STDOUT_FILENO, &[1]u8{char}) catch 0;
+            rawWrite(posix.STDOUT_FILENO, &[1]u8{char});
         }
     }
 
     fn appendText(_: *anyopaque, text: []const u8) void {
         var remaining = text;
         while (std.mem.indexOfScalar(u8, remaining, '\n')) |idx| {
-            _ = posix.write(posix.STDOUT_FILENO, remaining[0..idx]) catch 0;
-            _ = posix.write(posix.STDOUT_FILENO, "\r\n") catch 0;
+            rawWrite(posix.STDOUT_FILENO, remaining[0..idx]);
+            rawWrite(posix.STDOUT_FILENO, "\r\n");
             remaining = remaining[idx + 1 ..];
         }
         if (remaining.len > 0) {
-            _ = posix.write(posix.STDOUT_FILENO, remaining) catch 0;
+            rawWrite(posix.STDOUT_FILENO, remaining);
         }
     }
 
     fn clear(_: *anyopaque) void {
-        _ = posix.write(posix.STDOUT_FILENO, "\r\n\r\n---\r\n\r\n") catch 0;
+        rawWrite(posix.STDOUT_FILENO, "\r\n\r\n---\r\n\r\n");
     }
 
     fn reportError(_: *anyopaque, message: []const u8) void {
-        _ = posix.write(posix.STDOUT_FILENO, "\r\n\x1b[31m[error] ") catch 0;
-        _ = posix.write(posix.STDOUT_FILENO, message) catch 0;
-        _ = posix.write(posix.STDOUT_FILENO, "\x1b[0m\r\n") catch 0;
+        rawWrite(posix.STDOUT_FILENO, "\r\n\x1b[31m[error] ");
+        rawWrite(posix.STDOUT_FILENO, message);
+        rawWrite(posix.STDOUT_FILENO, "\x1b[0m\r\n");
     }
 };
 
 // ── Compile error display ──
 
-pub fn printCompileErrors(errors: *const folio.programme.CompileErrors, writer: std.io.AnyWriter) void {
+pub fn printCompileErrors(errors: *const folio.programme.CompileErrors, writer: *std.Io.Writer) void {
     for (errors.items) |node_err| {
         for (node_err.errors) |script_err| {
             writer.print("folio: [{s} beat {d} node {d}] {s}\n", .{
@@ -112,17 +118,19 @@ pub fn printCompileErrors(errors: *const folio.programme.CompileErrors, writer: 
 
 // ── Run loop ──
 
-pub fn runLoop(folio_session: *folio.FolioSession, is_terminal: bool) void {
-    var timer = std.time.Timer.start() catch return;
+pub fn runLoop(io: std.Io, folio_session: *folio.FolioSession, is_terminal: bool) void {
+    var last = std.Io.Timestamp.now(io, .awake);
     var waiting_prompt_shown = false;
 
     while (folio_session.getState() != .done) {
-        const delta_ns = timer.lap();
+        const now = std.Io.Timestamp.now(io, .awake);
+        const delta_ns = last.durationTo(now).nanoseconds;
+        last = now;
         const delta_ms = @as(f64, @floatFromInt(delta_ns)) / 1_000_000.0;
         _ = folio_session.advance(delta_ms);
 
         if (folio_session.getState() == .waiting and !waiting_prompt_shown) {
-            _ = posix.write(posix.STDOUT_FILENO, "\r\n\u{25b6} ") catch 0;
+            rawWrite(posix.STDOUT_FILENO, "\r\n\u{25b6} ");
             waiting_prompt_shown = true;
         }
 
