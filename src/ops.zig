@@ -39,7 +39,7 @@ fn instantOp(self: *Runner, args: Args) ExecError!?lish.Value {
     switch (args.count()) {
         0 => self.instant_mode = !self.instant_mode,
         1 => self.instant_mode = (try args.at(0).get()) != null,
-        else => return args.env.fail(op_instant ++ " takes 0 or 1 argument"),
+        else => return args.env.fail(.arity_mismatch, op_instant ++ " takes 0 or 1 argument"),
     }
     return null;
 }
@@ -49,7 +49,7 @@ fn ffwdOp(self: *Runner, args: Args) ExecError!?lish.Value {
     switch (args.count()) {
         0 => self.config.confirm_skips = !self.config.confirm_skips,
         1 => self.config.confirm_skips = (try args.at(0).get()) != null,
-        else => return args.env.fail(op_ffwd ++ " takes 0 or 1 argument"),
+        else => return args.env.fail(.arity_mismatch, op_ffwd ++ " takes 0 or 1 argument"),
     }
     return null;
 }
@@ -72,12 +72,12 @@ fn speedOp(self: *Runner, args: Args) ExecError!?lish.Value {
             } else if (std.mem.eql(u8, str, "fast")) {
                 self.config.chars_per_sec = 120.0;
             } else {
-                return args.env.fail(op_speed ++ ": unknown constant, expected \"slow\", \"normal\", or \"fast\"");
+                return args.env.fail(.invalid_argument, op_speed ++ ": unknown constant, expected \"slow\", \"normal\", or \"fast\"");
             }
         },
         .int => |n| self.config.chars_per_sec = @floatFromInt(n),
         .float => |f| self.config.chars_per_sec = f,
-        .list => return args.env.fail(op_speed ++ ": expected a number or speed constant"),
+        .list => return args.env.fail(.invalid_argument, op_speed ++ ": expected a number or speed constant"),
     }
     return null;
 }
@@ -95,12 +95,12 @@ fn delayOp(self: *Runner, args: Args) ExecError!?lish.Value {
             } else if (std.mem.eql(u8, str, "long")) {
                 self.pause_remaining = 1000.0;
             } else {
-                return args.env.fail(op_delay ++ ": unknown constant, expected \"short\", \"medium\", or \"long\"");
+                return args.env.fail(.invalid_argument, op_delay ++ ": unknown constant, expected \"short\", \"medium\", or \"long\"");
             }
         },
         .int => |n| self.pause_remaining = @floatFromInt(n),
         .float => |f| self.pause_remaining = f,
-        .list => return args.env.fail(op_delay ++ ": expected a number or delay constant"),
+        .list => return args.env.fail(.invalid_argument, op_delay ++ ": expected a number or delay constant"),
     }
     return null;
 }
@@ -110,7 +110,7 @@ fn sceneOp(self: *Runner, args: Args) ExecError!?lish.Value {
     var name_buf: [256]u8 = undefined;
     const name = try (try args.single()).resolveString(&name_buf);
     if (!self.loadScene(name)) {
-        return args.env.fail(op_scene ++ ": unknown scene name");
+        return args.env.fail(.invalid_argument, op_scene ++ ": unknown scene name");
     }
     return null;
 }

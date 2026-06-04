@@ -217,7 +217,7 @@ test "lish nodes are pre-parsed into AstNodes" {
     defer script.deinit();
     const beat = script.getScene("main").?[0];
     const ast_node = beat[0].lish_inline;
-    try std.testing.expect(ast_node.* == .expression);
+    try std.testing.expect(ast_node.body == .expression);
 }
 
 test "instant string value preserved" {

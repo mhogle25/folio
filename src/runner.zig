@@ -406,7 +406,7 @@ pub const Runner = struct {
         };
         _ = env.processExpression(expr, self.scope) catch |err| {
             const message = switch (err) {
-                error.RuntimeError => env.runtime_error orelse "unknown error",
+                error.RuntimeError => if (env.runtime_error) |re| re.message else "unknown error",
                 error.OutOfMemory => "out of memory",
             };
             self.render_target.reportError(message);
@@ -421,7 +421,7 @@ pub const Runner = struct {
         };
         const result = env.processExpression(expr, self.scope) catch |err| {
             const message = switch (err) {
-                error.RuntimeError => env.runtime_error orelse "unknown error",
+                error.RuntimeError => if (env.runtime_error) |re| re.message else "unknown error",
                 error.OutOfMemory => "out of memory",
             };
             self.render_target.reportError(message);
