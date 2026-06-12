@@ -18,7 +18,6 @@ pub const Token = struct {
     column: u32
 };
 
-// ── Syntax constants ──
 
 pub const SCENE_SIGIL = ':';
 pub const BEAT_SIGIL = ';';

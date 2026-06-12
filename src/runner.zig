@@ -8,7 +8,6 @@ const ProgrammeScene = prog_mod.ProgrammeScene;
 const ProgrammeBeat = prog_mod.ProgrammeBeat;
 const ProgrammeNode = prog_mod.ProgrammeNode;
 
-// ── RenderTarget ──
 
 /// Interface for receiving runner output. Implement by constructing a
 /// RenderTarget with a context pointer and a Vtable of function pointers.
@@ -45,7 +44,6 @@ pub const RenderTarget = struct {
     }
 };
 
-// ── RunnerConfig ──
 
 pub const RunnerConfig = struct {
     /// Characters emitted per second during typewriter effect.
@@ -56,7 +54,6 @@ pub const RunnerConfig = struct {
     instant_mode: bool = false,
 };
 
-// ── RunnerState ──
 
 pub const RunnerState = enum {
     /// Typewriter is actively emitting characters.
@@ -67,7 +64,6 @@ pub const RunnerState = enum {
     done,
 };
 
-// ── Runner ──
 
 pub const Runner = struct {
     // Consumer-provided (borrowed — must outlive the Runner)
@@ -228,7 +224,6 @@ pub const Runner = struct {
         return self.runner_state;
     }
 
-    // ── Internal ──
 
     fn currentBeat(self: *const Runner) ?ProgrammeBeat {
         if (self.beat_index >= self.scene.len) return null;
@@ -453,7 +448,6 @@ pub const Runner = struct {
     }
 };
 
-// ── Tests ──
 
 const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");
@@ -721,7 +715,6 @@ test "last section confirm results in done" {
     try std.testing.expectEqual(RunnerState.done, runner.getState());
 }
 
-// ── lish_inline / lish_defer timing tests ──
 
 /// Test-only op that increments a counter each time it is called.
 const FireCounter = struct {
@@ -855,7 +848,6 @@ test "lish_defer fires in declaration order" {
     try std.testing.expectEqual(@as(usize, 2), counter.count);
 }
 
-// ── Error reporting tests ──
 
 test "lish_inline runtime error is reported" {
     // 'unknown' is not registered — should produce a runtime error
@@ -914,7 +906,6 @@ test "instant_lish runtime error is reported and output is empty" {
     try std.testing.expectEqualStrings("", target.output());
 }
 
-// ── ffwd op tests ──
 
 const ops_mod = @import("ops.zig");
 

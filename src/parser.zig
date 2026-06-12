@@ -105,7 +105,6 @@ fn finalizeScene(
     try scenes.put(allocator, scene_name, scene);
 }
 
-// ── Tests ──
 
 const lexer = @import("lexer.zig");
 

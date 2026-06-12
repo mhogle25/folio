@@ -12,7 +12,6 @@ fn rawWrite(fd: posix.fd_t, bytes: []const u8) void {
     _ = std.os.linux.write(fd, bytes.ptr, bytes.len);
 }
 
-// ── Raw mode ──
 
 var global_original_termios: ?posix.termios = null;
 
@@ -56,7 +55,6 @@ pub fn disableRawMode(original: posix.termios) void {
     global_original_termios = null;
 }
 
-// ── TerminalTarget ──
 
 pub const TerminalTarget = struct {
     pub fn renderTarget(self: *TerminalTarget) RenderTarget {
@@ -101,7 +99,6 @@ pub const TerminalTarget = struct {
     }
 };
 
-// ── Compile error display ──
 
 pub fn printCompileErrors(errors: *const folio.programme.CompileErrors, writer: *std.Io.Writer) void {
     for (errors.items) |node_err| {
@@ -116,7 +113,6 @@ pub fn printCompileErrors(errors: *const folio.programme.CompileErrors, writer: 
     }
 }
 
-// ── Run loop ──
 
 pub fn runLoop(io: std.Io, folio_session: *folio.FolioSession, is_terminal: bool) void {
     var last = std.Io.Timestamp.now(io, .awake);

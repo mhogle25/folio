@@ -32,7 +32,6 @@ pub fn registerAll(registry: *Registry, runner: *Runner, allocator: Allocator) A
     try registry.registerOperation(allocator, op_end, Operation.fromBoundFn(Runner, endOp, runner));
 }
 
-// ── Ops ──
 
 /// Toggle instant mode (0 args), or set it by truthiness (1 arg).
 fn instantOp(self: *Runner, args: Args) ExecError!?lish.Value {

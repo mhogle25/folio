@@ -178,14 +178,42 @@ const Lexer = struct {
         return Token{ .token_type = .text, .value = self.source[start..self.pos], .line = line, .column = col };
     }
 
+    // Scans a lish expression embedded in a folio sigil region (`{...}`,
+    // `%{...}`, etc.). Skips lish strings AND lish comments while tracking
+    // brace depth, so that `{` or `}` inside lish strings or comments don't
+    // miscount the boundary.
+    //
+    // Mirrors lish-zig's lexer for the lexical forms it needs to skip:
+    //   - string literals via skipQuotedContent (handles backslash escapes)
+    //   - `##...##` / `##...\n` comments via skipCommentContent
+    //
+    // If lish gains a new lexical form (a new comment shape, a new string
+    // delimiter, etc.), this function must learn about it too. The contract
+    // lives in lish-zig/test/scanner_corpus/ — every embedder runs that corpus
+    // and the CI fails when boundaries diverge.
+    //
+    // TODO: eventually replace this duplicated logic with a call into a shared
+    // C ABI function exported by lish-zig (e.g. `lish_find_expression_boundary`).
+    // That would make lish-zig the single source of truth for lexical boundary
+    // finding, removing the drift risk entirely. See lish-zig roadmap, "lish
+    // embedders" section, for the case for / against and the prerequisites.
     fn scanBraceContent(self: *Lexer) LexError![]const u8 {
         const start = self.pos;
         var depth: u32 = 1;
         while (self.pos < self.source.len) {
-            switch (self.source[self.pos]) {
+            const c = self.source[self.pos];
+            switch (c) {
                 tok.QUOTE_DOUBLE, tok.QUOTE_SINGLE => |quote| {
                     self.pos += 1;
                     try self.skipQuotedContent(quote);
+                },
+                LISH_COMMENT_CHAR => {
+                    if (self.pos + 1 < self.source.len and self.source[self.pos + 1] == LISH_COMMENT_CHAR) {
+                        self.pos += 2;
+                        self.skipCommentContent();
+                    } else {
+                        self.pos += 1;
+                    }
                 },
                 tok.BLOCK_OPEN => {
                     depth += 1;
@@ -209,6 +237,23 @@ const Lexer = struct {
             }
         }
         return error.UnclosedBrace;
+    }
+
+    // Lish comment opener is `##`. Comments end at the next `##` (inline form)
+    // or at newline / EOF (to-EOL form). Mirrors lish-zig/src/lexer.zig's
+    // comment handling.
+    const LISH_COMMENT_CHAR: u8 = '#';
+
+    fn skipCommentContent(self: *Lexer) void {
+        while (self.pos < self.source.len) {
+            const c = self.source[self.pos];
+            if (c == tok.NEWLINE or c == tok.CARRIAGE_RETURN) return;
+            if (c == LISH_COMMENT_CHAR and self.pos + 1 < self.source.len and self.source[self.pos + 1] == LISH_COMMENT_CHAR) {
+                self.pos += 2;
+                return;
+            }
+            self.pos += 1;
+        }
     }
 
     fn skipQuotedContent(self: *Lexer, quote: u8) LexError!void {
@@ -263,7 +308,6 @@ const Lexer = struct {
     }
 };
 
-// ── Tests ──
 
 test "empty source" {
     const tokens = try tokenize("", std.testing.allocator);
@@ -347,6 +391,27 @@ test "lish inline with single-quoted string containing braces" {
     defer std.testing.allocator.free(tokens);
     try std.testing.expectEqual(TokenType.lish_inline, tokens[1].token_type);
     try std.testing.expectEqualStrings("say 'hello { world }'", tokens[1].value);
+}
+
+test "lish inline with inline comment containing close brace" {
+    const tokens = try tokenize("::main\n{ say ## use } when stuck ## :data }", std.testing.allocator);
+    defer std.testing.allocator.free(tokens);
+    try std.testing.expectEqual(TokenType.lish_inline, tokens[1].token_type);
+    try std.testing.expectEqualStrings("say ## use } when stuck ## :data", tokens[1].value);
+}
+
+test "lish inline with inline comment containing open brace" {
+    const tokens = try tokenize("::main\n{ set ## init { state ## :data }", std.testing.allocator);
+    defer std.testing.allocator.free(tokens);
+    try std.testing.expectEqual(TokenType.lish_inline, tokens[1].token_type);
+    try std.testing.expectEqualStrings("set ## init { state ## :data", tokens[1].value);
+}
+
+test "lish inline with to-EOL comment containing braces" {
+    const tokens = try tokenize("::main\n{\n  say :x ## skip } here\n  :y\n}", std.testing.allocator);
+    defer std.testing.allocator.free(tokens);
+    try std.testing.expectEqual(TokenType.lish_inline, tokens[1].token_type);
+    try std.testing.expectEqualStrings("say :x ## skip } here\n  :y", tokens[1].value);
 }
 
 test "lish defer" {

@@ -31,7 +31,6 @@ pub const Programme = struct {
     }
 };
 
-// ── Compile errors ──
 
 pub const ScriptError = struct {
     message: []const u8,
@@ -58,7 +57,6 @@ pub const CompileResult = union(enum) {
     err: CompileErrors,
 };
 
-// ── Compile ──
 
 /// Compile a Script into an executable Programme by validating all embedded
 /// lish expressions. Returns a Programme on success or CompileErrors on failure.
@@ -244,7 +242,6 @@ fn validateLishNode(
     }
 }
 
-// ── Tests ──
 
 const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");

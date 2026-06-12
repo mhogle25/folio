@@ -13,7 +13,6 @@ pub fn main(init: std.process.Init) !void {
     const stdout = &stdout_writer.interface;
     const stderr = &stderr_writer.interface;
 
-    // ── Parse CLI args ──
 
     var arg_iter = init.minimal.args.iterate();
     _ = arg_iter.next(); // skip argv[0]
@@ -30,7 +29,6 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    // ── Load and compile script ──
 
     var compile_result = folio.compileFile(io, script_path, allocator) catch |err| {
         stderr.print("folio: error loading \"{s}\": {s}\n", .{ script_path, @errorName(err) }) catch {};
@@ -47,13 +45,11 @@ pub fn main(init: std.process.Init) !void {
     };
     defer prog.deinit();
 
-    // ── Set up session ──
 
     var terminal_target = terminal_mod.TerminalTarget{};
     const folio_session = try folio.FolioSession.init(&prog, terminal_target.renderTarget(), .{}, allocator);
     defer folio_session.deinit();
 
-    // ── Load initial scene ──
 
     stdout.print("folio: playing \"{s}\" (scene: {s})\n\n", .{ script_path, scene_name }) catch {};
 
@@ -62,7 +58,6 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(1);
     }
 
-    // ── Enable raw mode ──
 
     const original_termios = terminal_mod.enableRawMode() catch {
         terminal_mod.runLoop(io, folio_session, false);
