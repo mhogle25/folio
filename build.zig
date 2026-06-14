@@ -45,7 +45,7 @@ pub fn build(b: *std.Build) void {
     const run_mod_tests = b.addRunArtifact(mod_tests);
 
     // Scanner corpus: enforces the shared lexical-boundary contract documented
-    // in ../lish-zig/test/scanner_corpus/. Cases come in via @embedFile so no
+    // in ../lish-zig/src/scanner_corpus/. Cases come in via @embedFile so no
     // filesystem access is needed at test time, but the relative path assumes
     // lish-zig is a sibling of folio-zig in the same parent directory.
     const corpus_tests = b.addTest(.{

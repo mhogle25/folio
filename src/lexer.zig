@@ -1,4 +1,5 @@
 const std = @import("std");
+const lish = @import("lish");
 const tok = @import("token.zig");
 const Token = tok.Token;
 const TokenType = tok.TokenType;
@@ -179,95 +180,32 @@ const Lexer = struct {
     }
 
     // Scans a lish expression embedded in a folio sigil region (`{...}`,
-    // `%{...}`, etc.). Skips lish strings AND lish comments while tracking
-    // brace depth, so that `{` or `}` inside lish strings or comments don't
-    // miscount the boundary.
+    // `%{...}`, etc.) up to its closing brace, skipping any `}` inside a lish
+    // string, comment, or nested `{...}`.
     //
-    // Mirrors lish-zig's lexer for the lexical forms it needs to skip:
-    //   - string literals via skipQuotedContent (handles backslash escapes)
-    //   - `##...##` / `##...\n` comments via skipCommentContent
-    //
-    // If lish gains a new lexical form (a new comment shape, a new string
-    // delimiter, etc.), this function must learn about it too. The contract
-    // lives in lish-zig/test/scanner_corpus/ — every embedder runs that corpus
-    // and the CI fails when boundaries diverge.
-    //
-    // TODO: eventually replace this duplicated logic with a call into a shared
-    // C ABI function exported by lish-zig (e.g. `lish_find_expression_boundary`).
-    // That would make lish-zig the single source of truth for lexical boundary
-    // finding, removing the drift risk entirely. See lish-zig roadmap, "lish
-    // embedders" section, for the case for / against and the prerequisites.
+    // The boundary logic lives in lish-zig (`lish.findExpressionBoundary`), so
+    // folio no longer mirrors lish's string/comment rules — when lish gains a
+    // new lexical form, the shared function learns it once and every embedder
+    // follows. lish-zig's scanner corpus pins that function to lish's lexer.
+    // folio's only remaining job here is keeping its own line/col in sync across
+    // the consumed span.
     fn scanBraceContent(self: *Lexer) LexError![]const u8 {
-        const start = self.pos;
-        var depth: u32 = 1;
-        while (self.pos < self.source.len) {
-            const c = self.source[self.pos];
-            switch (c) {
-                tok.QUOTE_DOUBLE, tok.QUOTE_SINGLE => |quote| {
-                    self.pos += 1;
-                    try self.skipQuotedContent(quote);
-                },
-                LISH_COMMENT_CHAR => {
-                    if (self.pos + 1 < self.source.len and self.source[self.pos + 1] == LISH_COMMENT_CHAR) {
-                        self.pos += 2;
-                        self.skipCommentContent();
-                    } else {
-                        self.pos += 1;
-                    }
-                },
-                tok.BLOCK_OPEN => {
-                    depth += 1;
-                    self.pos += 1;
-                },
-                tok.BLOCK_CLOSE => {
-                    depth -= 1;
-                    if (depth == 0) {
-                        const content = std.mem.trim(u8, self.source[start..self.pos], " \t\r\n");
-                        self.pos += 1;
-                        return content;
-                    }
-                    self.pos += 1;
-                },
-                tok.NEWLINE => {
-                    self.line += 1;
-                    self.col = 1;
-                    self.pos += 1;
-                },
-                else => self.pos += 1,
-            }
-        }
-        return error.UnclosedBrace;
-    }
+        const rest = self.source[self.pos..];
+        const boundary = lish.findExpressionBoundary(rest, tok.BLOCK_OPEN, tok.BLOCK_CLOSE) orelse
+            return error.UnclosedBrace;
 
-    // Lish comment opener is `##`. Comments end at the next `##` (inline form)
-    // or at newline / EOF (to-EOL form). Mirrors lish-zig/src/lexer.zig's
-    // comment handling.
-    const LISH_COMMENT_CHAR: u8 = '#';
-
-    fn skipCommentContent(self: *Lexer) void {
-        while (self.pos < self.source.len) {
-            const c = self.source[self.pos];
-            if (c == tok.NEWLINE or c == tok.CARRIAGE_RETURN) return;
-            if (c == LISH_COMMENT_CHAR and self.pos + 1 < self.source.len and self.source[self.pos + 1] == LISH_COMMENT_CHAR) {
-                self.pos += 2;
-                return;
-            }
-            self.pos += 1;
-        }
-    }
-
-    fn skipQuotedContent(self: *Lexer, quote: u8) LexError!void {
-        while (self.pos < self.source.len) {
-            if (self.source[self.pos] == tok.BACKSLASH) {
-                self.pos += 2;
-            } else if (self.source[self.pos] == quote) {
-                self.pos += 1;
-                return;
+        const consumed = rest[0 .. boundary + 1]; // content + the closing brace
+        for (consumed) |ch| {
+            if (ch == tok.NEWLINE) {
+                self.line += 1;
+                self.col = 1;
             } else {
-                self.pos += 1;
+                self.col += 1;
             }
         }
-        return error.UnclosedString;
+        self.pos += boundary + 1;
+
+        return std.mem.trim(u8, rest[0..boundary], " \t\r\n");
     }
 
     fn scanQuotedString(self: *Lexer, quote: u8) LexError![]const u8 {

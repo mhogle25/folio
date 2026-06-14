@@ -21,15 +21,16 @@ const op_end      = "end";
 
 /// Register all folio runner ops into the given registry, bound to the given runner.
 pub fn registerAll(registry: *Registry, runner: *Runner, allocator: Allocator) Allocator.Error!void {
-    try registry.registerOperation(allocator, op_instant, Operation.fromBoundFn(Runner, instantOp, runner));
-    try registry.registerOperation(allocator, op_ffwd, Operation.fromBoundFn(Runner, ffwdOp, runner));
-    try registry.registerOperation(allocator, op_speed, Operation.fromBoundFn(Runner, speedOp, runner));
-    try registry.registerOperation(allocator, op_delay, Operation.fromBoundFn(Runner, delayOp, runner));
-    try registry.registerOperation(allocator, op_scene, Operation.fromBoundFn(Runner, sceneOp, runner));
-    try registry.registerOperation(allocator, op_skip, Operation.fromBoundFn(Runner, skipOp, runner));
-    try registry.registerOperation(allocator, op_continue, Operation.fromBoundFn(Runner, continueOp, runner));
-    try registry.registerOperation(allocator, op_clear, Operation.fromBoundFn(Runner, clearOp, runner));
-    try registry.registerOperation(allocator, op_end, Operation.fromBoundFn(Runner, endOp, runner));
+    const g = registry.group(allocator, "folio");
+    try g.register(op_instant,  Operation.fromBoundFn(Runner, instantOp,  runner, .{ .signature = "instant [$on|$off] -> $none", .description = "Toggle instant mode, or set it by truthiness." }));
+    try g.register(op_ffwd,     Operation.fromBoundFn(Runner, ffwdOp,     runner, .{ .signature = "ffwd [$on|$off] -> $none",    .description = "Toggle skip confirmation (fast-forward), or set it by truthiness." }));
+    try g.register(op_speed,    Operation.fromBoundFn(Runner, speedOp,    runner, .{ .signature = "speed [n|name] -> $none",     .description = "Set typewriter speed: chars/sec, or \"slow\"/\"normal\"/\"fast\"; no arg resets to default." }));
+    try g.register(op_delay,    Operation.fromBoundFn(Runner, delayOp,    runner, .{ .signature = "delay ms|name -> $none",      .description = "Pause the typewriter: milliseconds, or \"short\"/\"medium\"/\"long\"." }));
+    try g.register(op_scene,    Operation.fromBoundFn(Runner, sceneOp,    runner, .{ .signature = "scene name -> $none",         .description = "Jump to a named scene." }));
+    try g.register(op_skip,     Operation.fromBoundFn(Runner, skipOp,     runner, .{ .signature = "skip -> $none",               .description = "Flush and advance to the next beat without waiting for confirm." }));
+    try g.register(op_continue, Operation.fromBoundFn(Runner, continueOp, runner, .{ .signature = "continue -> $none",           .description = "Flush the current beat to waiting state without advancing." }));
+    try g.register(op_clear,    Operation.fromBoundFn(Runner, clearOp,    runner, .{ .signature = "clear -> $none",              .description = "Clear the render target." }));
+    try g.register(op_end,      Operation.fromBoundFn(Runner, endOp,      runner, .{ .signature = "end -> $none",                .description = "Immediately end the scene, bypassing remaining beats." }));
 }
 
 

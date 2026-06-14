@@ -4,6 +4,11 @@
 //! consumes. folio only knows about the `}` terminator (its job is finding
 //! lish-inline region boundaries inside sigil regions like `{...}`). The `|`
 //! cases are exercised by lish-zig's own test runner against the same module.
+//!
+//! scanBraceContent now delegates to `lish.findExpressionBoundary`, so this is
+//! an integration smoke test that folio drives the shared function correctly
+//! (region wrapping, content trimming, position advance) rather than a check of
+//! independent boundary logic.
 
 const std = @import("std");
 const folio = @import("folio");
