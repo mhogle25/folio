@@ -742,7 +742,7 @@ test "lish_inline fires between preceding and following text" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = "ping -> $none", .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
@@ -775,7 +775,7 @@ test "lish_inline at beat end fires when waiting state begins" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = "ping -> $none", .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
@@ -801,7 +801,7 @@ test "lish_defer does not fire during advance, fires on confirm" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = "ping -> $none", .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
@@ -833,7 +833,7 @@ test "lish_defer fires in declaration order" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = "ping -> $none", .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
