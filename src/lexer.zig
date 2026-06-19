@@ -183,10 +183,10 @@ const Lexer = struct {
     // `%{...}`, etc.) up to its closing brace, skipping any `}` inside a lish
     // string, comment, or nested `{...}`.
     //
-    // The boundary logic lives in lish-zig (`lish.findExpressionBoundary`), so
+    // The boundary logic lives in lish (`lish.findExpressionBoundary`), so
     // folio no longer mirrors lish's string/comment rules — when lish gains a
     // new lexical form, the shared function learns it once and every embedder
-    // follows. lish-zig's scanner corpus pins that function to lish's lexer.
+    // follows. lish's scanner corpus pins that function to lish's lexer.
     // folio's only remaining job here is keeping its own line/col in sync across
     // the consumed span.
     fn scanBraceContent(self: *Lexer) LexError![]const u8 {

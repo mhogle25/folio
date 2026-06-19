@@ -1,8 +1,8 @@
-# folio-zig
+# folio
 
 A dialogue scripting DSL for games. folio lets you write scenes and beats as plain text, embed lish expressions for logic and side-effects, and drive playback through a host-controlled Runner. It is designed to be embedded in game engines or other interactive applications.
 
-Built on [lish-zig](https://github.com/mhogle25/lish-zig).
+Built on [lish](https://github.com/mhogle25/lish).
 
 ## Script Syntax
 
@@ -112,7 +112,7 @@ Requires **Zig 0.15.2** or later.
 Add as a dependency in your `build.zig.zon`:
 
 ```
-zig fetch --save git+https://github.com/mhogle25/folio-zig.git
+zig fetch --save git+https://github.com/mhogle25/folio.git
 ```
 
 Wire it up in `build.zig` alongside lish:
@@ -349,7 +349,7 @@ Hello, #{ proc :playerName }.
 
 ## Terminal Player
 
-folio-zig ships a terminal player for previewing scripts during development.
+folio ships a terminal player for previewing scripts during development.
 
 ```sh
 # Build

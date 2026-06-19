@@ -3,7 +3,7 @@
 //! Cases come from `lish.scanner_corpus` — same shared contract every embedder
 //! consumes. folio only knows about the `}` terminator (its job is finding
 //! lish-inline region boundaries inside sigil regions like `{...}`). The `|`
-//! cases are exercised by lish-zig's own test runner against the same module.
+//! cases are exercised by lish's own test runner against the same module.
 //!
 //! scanBraceContent now delegates to `lish.findExpressionBoundary`, so this is
 //! an integration smoke test that folio drives the shared function correctly
