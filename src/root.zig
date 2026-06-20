@@ -1,4 +1,5 @@
 const std = @import("std");
+const lish = @import("lish");
 
 pub const token = @import("token.zig");
 pub const lexer = @import("lexer.zig");
@@ -11,6 +12,22 @@ pub const session = @import("session.zig");
 
 pub const FolioSession = session.FolioSession;
 pub const FolioSessionConfig = session.FolioSessionConfig;
+
+/// Serialize folio's full vocabulary (lish core + folio runner ops) as
+/// `--dump-ops` JSON to `writer`. Point lish-lsp's vocabulary at the output and
+/// folio scripts get completion/hover/signature help for folio ops, with full
+/// binding/scope analysis. Builds a registry directly from the op metadata (no
+/// session, runner, or programme): folio ops are registered metadata-only here,
+/// never executed.
+pub fn dumpOps(writer: *std.Io.Writer, allocator: std.mem.Allocator) !void {
+    var registry = lish.Registry.init(allocator);
+    defer registry.deinit(allocator);
+
+    try lish.builtins.registerAll(&registry, allocator);
+    try ops.registerMetadataInto(&registry, allocator);
+
+    try lish.introspect.serializeOperations(writer, &registry, allocator);
+}
 
 /// Compile a folio source string into an executable Programme.
 /// Returns a `CompileResult` — call `.ok.deinit()` or `.err.deinit()` when done.

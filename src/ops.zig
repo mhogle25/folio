@@ -22,53 +22,80 @@ const op_continue = "continue";
 const op_clear    = "clear";
 const op_end      = "end";
 
+// Op metadata (signature + description) lives here once, shared by the live
+// registration below (which binds each op to the runner) and the metadata-only
+// registration used by `--dump-ops`, so the dumped signatures cannot drift from
+// the real ops.
+const meta_instant = Operation.Meta{
+    .signature   = .{ .params = &on_off, .returns = "$none" },
+    .description = "Toggle instant mode, or set it by truthiness.",
+};
+const meta_ffwd = Operation.Meta{
+    .signature   = .{ .params = &on_off, .returns = "$none" },
+    .description = "Toggle skip confirmation (fast-forward), or set it by truthiness.",
+};
+const meta_speed = Operation.Meta{
+    .signature   = .{ .params = &.{Param.optional("n|name")}, .returns = "$none" },
+    .description = "Set typewriter speed: chars/sec, or \"slow\"/\"normal\"/\"fast\"; no arg resets to default.",
+};
+const meta_delay = Operation.Meta{
+    .signature   = .{ .params = &.{Param.value("ms|name")}, .returns = "$none" },
+    .description = "Pause the typewriter: milliseconds, or \"short\"/\"medium\"/\"long\".",
+};
+const meta_scene = Operation.Meta{
+    .signature   = .{ .params = &.{Param.value("name")}, .returns = "$none" },
+    .description = "Jump to a named scene.",
+};
+const meta_skip = Operation.Meta{
+    .signature   = .{ .returns = "$none" },
+    .description = "Flush and advance to the next beat without waiting for confirm.",
+};
+const meta_continue = Operation.Meta{
+    .signature   = .{ .returns = "$none" },
+    .description = "Flush the current beat to waiting state without advancing.",
+};
+const meta_clear = Operation.Meta{
+    .signature   = .{ .returns = "$none" },
+    .description = "Clear the render target.",
+};
+const meta_end = Operation.Meta{
+    .signature   = .{ .returns = "$none" },
+    .description = "Immediately end the scene, bypassing remaining beats.",
+};
+
 /// Register all folio runner ops into the given registry, bound to the given runner.
 pub fn registerAll(registry: *Registry, runner: *Runner, allocator: Allocator) Allocator.Error!void {
     const g = registry.group(allocator, "folio");
-    try g.register(op_instant, Operation.fromBoundFn(Runner, instantOp, runner, .{
-        .signature = .{ .params = &on_off, .returns = "$none" },
-        .description = "Toggle instant mode, or set it by truthiness.",
-    }));
+    try g.register(op_instant,  Operation.fromBoundFn(Runner, instantOp,  runner, meta_instant));
+    try g.register(op_ffwd,     Operation.fromBoundFn(Runner, ffwdOp,     runner, meta_ffwd));
+    try g.register(op_speed,    Operation.fromBoundFn(Runner, speedOp,    runner, meta_speed));
+    try g.register(op_delay,    Operation.fromBoundFn(Runner, delayOp,    runner, meta_delay));
+    try g.register(op_scene,    Operation.fromBoundFn(Runner, sceneOp,    runner, meta_scene));
+    try g.register(op_skip,     Operation.fromBoundFn(Runner, skipOp,     runner, meta_skip));
+    try g.register(op_continue, Operation.fromBoundFn(Runner, continueOp, runner, meta_continue));
+    try g.register(op_clear,    Operation.fromBoundFn(Runner, clearOp,    runner, meta_clear));
+    try g.register(op_end,      Operation.fromBoundFn(Runner, endOp,      runner, meta_end));
+}
 
-    try g.register(op_ffwd, Operation.fromBoundFn(Runner, ffwdOp, runner, .{
-        .signature = .{ .params = &on_off, .returns = "$none" },
-        .description = "Toggle skip confirmation (fast-forward), or set it by truthiness.",
-    }));
+/// Register only the metadata for folio's ops (no runner binding), so a registry
+/// can describe folio's vocabulary without standing up a live session. Used by
+/// `--dump-ops` to expose folio ops to editor tooling. The registered call is a
+/// no-op: these entries describe the ops, they are never executed.
+pub fn registerMetadataInto(registry: *Registry, allocator: Allocator) Allocator.Error!void {
+    const g = registry.group(allocator, "folio");
+    try g.register(op_instant,  Operation.fromFn(metadataNoop, meta_instant));
+    try g.register(op_ffwd,     Operation.fromFn(metadataNoop, meta_ffwd));
+    try g.register(op_speed,    Operation.fromFn(metadataNoop, meta_speed));
+    try g.register(op_delay,    Operation.fromFn(metadataNoop, meta_delay));
+    try g.register(op_scene,    Operation.fromFn(metadataNoop, meta_scene));
+    try g.register(op_skip,     Operation.fromFn(metadataNoop, meta_skip));
+    try g.register(op_continue, Operation.fromFn(metadataNoop, meta_continue));
+    try g.register(op_clear,    Operation.fromFn(metadataNoop, meta_clear));
+    try g.register(op_end,      Operation.fromFn(metadataNoop, meta_end));
+}
 
-    try g.register(op_speed, Operation.fromBoundFn(Runner, speedOp, runner, .{
-        .signature = .{ .params = comptime &.{Param.optional("n|name")}, .returns = "$none" },
-        .description = "Set typewriter speed: chars/sec, or \"slow\"/\"normal\"/\"fast\"; no arg resets to default.",
-    }));
-
-    try g.register(op_delay, Operation.fromBoundFn(Runner, delayOp, runner, .{
-        .signature = .{ .params = comptime &.{Param.value("ms|name")}, .returns = "$none" },
-        .description = "Pause the typewriter: milliseconds, or \"short\"/\"medium\"/\"long\".",
-    }));
-
-    try g.register(op_scene, Operation.fromBoundFn(Runner, sceneOp, runner, .{
-        .signature = .{ .params = comptime &.{Param.value("name")}, .returns = "$none" },
-        .description = "Jump to a named scene.",
-    }));
-
-    try g.register(op_skip, Operation.fromBoundFn(Runner, skipOp, runner, .{
-        .signature = .{ .returns = "$none" },
-        .description = "Flush and advance to the next beat without waiting for confirm.",
-    }));
-
-    try g.register(op_continue, Operation.fromBoundFn(Runner, continueOp, runner, .{
-        .signature = .{ .returns = "$none" },
-        .description = "Flush the current beat to waiting state without advancing.",
-    }));
-
-    try g.register(op_clear, Operation.fromBoundFn(Runner, clearOp, runner, .{
-        .signature = .{ .returns = "$none" },
-        .description = "Clear the render target.",
-    }));
-
-    try g.register(op_end, Operation.fromBoundFn(Runner, endOp, runner, .{
-        .signature = .{ .returns = "$none" },
-        .description = "Immediately end the scene, bypassing remaining beats.",
-    }));
+fn metadataNoop(_: Args) ExecError!?lish.Value {
+    return null;
 }
 
 
@@ -179,4 +206,31 @@ fn endOp(self: *Runner, args: Args) ExecError!?lish.Value {
     _ = args;
     self.endScene();
     return null;
+}
+
+
+const testing = std.testing;
+
+test "registerMetadataInto exposes exactly folio's ops" {
+    var registry = Registry.init(testing.allocator);
+    defer registry.deinit(testing.allocator);
+    try registerMetadataInto(&registry, testing.allocator);
+
+    // Every op registered live by registerAll must also be described here (they
+    // share the op-name consts and meta_* values), so the dump can't omit one.
+    const names = [_][]const u8{
+        op_instant, op_ffwd,     op_speed, op_delay, op_scene,
+        op_skip,    op_continue, op_clear, op_end,
+    };
+    for (names) |name| try testing.expect(registry.getOperation(name) != null);
+
+    // And no extras: exactly these folio-category ops, nothing stray.
+    var folio_count: usize = 0;
+    var it = registry.operations.iterator();
+    while (it.next()) |entry| {
+        if (entry.value_ptr.category) |category| {
+            if (std.mem.eql(u8, category, "folio")) folio_count += 1;
+        }
+    }
+    try testing.expectEqual(names.len, folio_count);
 }

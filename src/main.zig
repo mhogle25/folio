@@ -17,10 +17,22 @@ pub fn main(init: std.process.Init) !void {
     var arg_iter = init.minimal.args.iterate();
     _ = arg_iter.next(); // skip argv[0]
 
-    const script_path = arg_iter.next() orelse {
-        stderr.writeAll("usage: folio <script.folio> [--scene <name>]\n") catch {};
+    const first_arg = arg_iter.next() orelse {
+        stderr.writeAll("usage: folio <script.folio> [--scene <name>] | folio --dump-ops\n") catch {};
         std.process.exit(1);
     };
+
+    // --dump-ops: emit folio's full vocabulary (lish core + folio ops) as JSON
+    // for editor tooling (lish-lsp's `vocabulary` setting), then exit.
+    if (std.mem.eql(u8, first_arg, "--dump-ops")) {
+        folio.dumpOps(stdout, allocator) catch |err| {
+            stderr.print("folio: --dump-ops failed: {s}\n", .{@errorName(err)}) catch {};
+            std.process.exit(1);
+        };
+        return;
+    }
+
+    const script_path = first_arg;
     var scene_name: []const u8 = "main";
 
     while (arg_iter.next()) |arg| {
