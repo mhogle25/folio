@@ -27,3 +27,10 @@ jobs:
       - name: zig build test
         working-directory: folio
         run: zig build test
+      # The generated/ constants are committed and vendored by tree-sitter-folio;
+      # fail if they drift from token.zig.
+      - name: generated artifacts up to date
+        working-directory: folio
+        run: |
+          zig build gen
+          git diff --exit-code generated/

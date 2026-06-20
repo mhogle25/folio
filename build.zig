@@ -38,6 +38,26 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the folio terminal player");
     run_step.dependOn(&run_cmd.step);
 
+    // Cross-language artifact generator. Reflects over src/token.zig and emits
+    // the character constants tree-sitter-folio's JS + C build vendors via its
+    // sync step. Run with `zig build gen`; not part of the default build (the
+    // output directory is passed as the first argument). Mirrors lish.
+    const gen_exe = b.addExecutable(.{
+        .name = "gen",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/gen.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "folio", .module = mod },
+            },
+        }),
+    });
+    const run_gen = b.addRunArtifact(gen_exe);
+    run_gen.addArg(b.pathFromRoot("generated"));
+    const gen_step = b.step("gen", "Generate cross-language artifacts from token.zig");
+    gen_step.dependOn(&run_gen.step);
+
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });

@@ -22,7 +22,7 @@ Where are you headed?
 Somewhere warm.
 ;;
 // long beat before the stranger names the destination
-A long pause.{ delay long } Then:
+A long pause.{ pause long } Then:
 ;;
 #"Stranger:"
 The market. Do you know it?
