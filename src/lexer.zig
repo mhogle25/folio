@@ -15,12 +15,24 @@ pub fn tokenize(source: []const u8, allocator: std.mem.Allocator) ![]Token {
     return lexer.scan(allocator);
 }
 
+/// Like `tokenize`, but on a `LexError` sets `error_offset` to the byte offset of
+/// the offending token (tooling: a precisely-placed diagnostic).
+pub fn tokenizeReporting(source: []const u8, allocator: std.mem.Allocator, error_offset: *usize) ![]Token {
+    var lexer = Lexer.init(source);
+    return lexer.scan(allocator) catch |err| {
+        error_offset.* = lexer.error_offset;
+        return err;
+    };
+}
+
 const Lexer = struct {
     source: []const u8,
     pos: usize,
     line: u32,
     col: u32,
     at_line_start: bool,
+    /// Byte offset of the token being scanned, so a lex error can report where.
+    error_offset: usize = 0,
 
     fn init(source: []const u8) Lexer {
         return .{
@@ -54,6 +66,7 @@ const Lexer = struct {
         const line = self.line;
         const col = self.col;
         const ch = self.source[self.pos];
+        self.error_offset = self.pos; // token start, for lex-error reporting
 
         if (self.at_line_start) {
             // // comment: consume the line (including its newline) and retry.
