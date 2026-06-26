@@ -7,10 +7,20 @@ const Args = lish.Args;
 const ExecError = lish.exec.ExecError;
 const Operation = lish.Operation;
 const Param = lish.Param;
+const LishType = lish.LishType;
 const Registry = lish.Registry;
 const Runner = runner_mod.Runner;
 
-const on_off = [_]Param{Param.optional("$on|$off")};
+const on_off = [_]Param{.{ .name = "on", .arity = .optional }};
+
+// Named presets, single-sourced: the op looks values up here, and each signature's
+// literal-set is derived from `.keys()` (below) so the two can't drift.
+const speed_presets = std.StaticStringMap(f32).initComptime(.{
+    .{ "slow", 30.0 }, .{ "normal", 60.0 }, .{ "fast", 120.0 },
+});
+const delay_presets = std.StaticStringMap(f32).initComptime(.{
+    .{ "short", 250.0 }, .{ "medium", 500.0 }, .{ "long", 1000.0 },
+});
 
 const op_instant  = "instant";
 const op_ffwd     = "ffwd";
@@ -27,39 +37,39 @@ const op_end      = "end";
 // registration used by `--dump-ops`, so the dumped signatures cannot drift from
 // the real ops.
 const meta_instant = Operation.Meta{
-    .signature   = .{ .params = &on_off, .returns = "$none" },
+    .signature   = .{ .params = &on_off, .returns = .none },
     .description = "Toggle instant mode, or set it by truthiness.",
 };
 const meta_ffwd = Operation.Meta{
-    .signature   = .{ .params = &on_off, .returns = "$none" },
+    .signature   = .{ .params = &on_off, .returns = .none },
     .description = "Toggle skip confirmation (fast-forward), or set it by truthiness.",
 };
 const meta_speed = Operation.Meta{
-    .signature   = .{ .params = &.{Param.optional("n|name")}, .returns = "$none" },
-    .description = "Set typewriter speed: chars/sec, or \"slow\"/\"normal\"/\"fast\"; no arg resets to default.",
+    .signature   = .{ .params = &.{Param{ .name = "speed", .arity = .optional, .type = LishType.oneOf(&.{.number}, speed_presets.keys()) }}, .returns = .none },
+    .description = "Set typewriter speed: chars/sec, or a named preset; no arg resets to default.",
 };
 const meta_delay = Operation.Meta{
-    .signature   = .{ .params = &.{Param.value("ms|name")}, .returns = "$none" },
-    .description = "Pause the typewriter: milliseconds, or \"short\"/\"medium\"/\"long\".",
+    .signature   = .{ .params = &.{Param{ .name = "duration", .type = LishType.oneOf(&.{.number}, delay_presets.keys()) }}, .returns = .none },
+    .description = "Pause the typewriter: milliseconds, or a named preset.",
 };
 const meta_scene = Operation.Meta{
-    .signature   = .{ .params = &.{Param.value("name")}, .returns = "$none" },
+    .signature   = .{ .params = &.{Param{ .name = "name", .type = .string }}, .returns = .none },
     .description = "Jump to a named scene.",
 };
 const meta_skip = Operation.Meta{
-    .signature   = .{ .returns = "$none" },
+    .signature   = .{ .returns = .none },
     .description = "Flush and advance to the next beat without waiting for confirm.",
 };
 const meta_continue = Operation.Meta{
-    .signature   = .{ .returns = "$none" },
+    .signature   = .{ .returns = .none },
     .description = "Flush the current beat to waiting state without advancing.",
 };
 const meta_clear = Operation.Meta{
-    .signature   = .{ .returns = "$none" },
+    .signature   = .{ .returns = .none },
     .description = "Clear the render target.",
 };
 const meta_end = Operation.Meta{
-    .signature   = .{ .returns = "$none" },
+    .signature   = .{ .returns = .none },
     .description = "Immediately end the scene, bypassing remaining beats.",
 };
 
@@ -129,20 +139,11 @@ fn speedOp(self: *Runner, args: Args) ExecError!?lish.Value {
     }
     const value = try args.resolveSingle();
     switch (value) {
-        .string => |str| {
-            if (std.mem.eql(u8, str, "slow")) {
-                self.config.chars_per_sec = 30.0;
-            } else if (std.mem.eql(u8, str, "normal")) {
-                self.config.chars_per_sec = 60.0;
-            } else if (std.mem.eql(u8, str, "fast")) {
-                self.config.chars_per_sec = 120.0;
-            } else {
-                return args.env.fail(.invalid_argument, op_speed ++ ": unknown constant, expected \"slow\", \"normal\", or \"fast\"");
-            }
-        },
+        .string => |str| self.config.chars_per_sec = speed_presets.get(str) orelse
+            return args.env.fail(.invalid_argument, op_speed ++ ": expected a number or a named speed preset"),
         .int => |n| self.config.chars_per_sec = @floatFromInt(n),
         .float => |f| self.config.chars_per_sec = f,
-        .list => return args.env.fail(.invalid_argument, op_speed ++ ": expected a number or speed constant"),
+        .list => return args.env.fail(.invalid_argument, op_speed ++ ": expected a number or a named speed preset"),
     }
     return null;
 }
@@ -152,20 +153,11 @@ fn speedOp(self: *Runner, args: Args) ExecError!?lish.Value {
 fn delayOp(self: *Runner, args: Args) ExecError!?lish.Value {
     const value = try args.resolveSingle();
     switch (value) {
-        .string => |str| {
-            if (std.mem.eql(u8, str, "short")) {
-                self.pause_remaining = 250.0;
-            } else if (std.mem.eql(u8, str, "medium")) {
-                self.pause_remaining = 500.0;
-            } else if (std.mem.eql(u8, str, "long")) {
-                self.pause_remaining = 1000.0;
-            } else {
-                return args.env.fail(.invalid_argument, op_delay ++ ": unknown constant, expected \"short\", \"medium\", or \"long\"");
-            }
-        },
+        .string => |str| self.pause_remaining = delay_presets.get(str) orelse
+            return args.env.fail(.invalid_argument, op_delay ++ ": expected a number or a named delay preset"),
         .int => |n| self.pause_remaining = @floatFromInt(n),
         .float => |f| self.pause_remaining = f,
-        .list => return args.env.fail(.invalid_argument, op_delay ++ ": expected a number or delay constant"),
+        .list => return args.env.fail(.invalid_argument, op_delay ++ ": expected a number or a named delay preset"),
     }
     return null;
 }

@@ -68,7 +68,7 @@ pub const RunnerState = enum {
 pub const Runner = struct {
     // Consumer-provided (borrowed — must outlive the Runner)
     programme: *const Programme,
-    registry: *const lish.Registry,
+    registry: *lish.Registry,
     scope: *const lish.Scope,
     render_target: RenderTarget,
     config: RunnerConfig,
@@ -78,7 +78,7 @@ pub const Runner = struct {
     eval_arena: std.heap.ArenaAllocator,
 
     // Commands deferred with %{ } — fired in order when the player confirms.
-    deferred_queue: std.ArrayListUnmanaged(lish.exec.Expression),
+    deferred_queue: std.ArrayListUnmanaged(lish.exec.Unit),
 
     // Position
     runner_state: RunnerState,
@@ -107,7 +107,7 @@ pub const Runner = struct {
 
     pub fn init(
         programme: *const Programme,
-        registry: *const lish.Registry,
+        registry: *lish.Registry,
         scope: *const lish.Scope,
         render_target: RenderTarget,
         config: RunnerConfig,
@@ -394,12 +394,17 @@ pub const Runner = struct {
         self.enterBeat();
     }
 
-    fn executeSideEffect(self: *Runner, expr: lish.exec.Expression) void {
+    fn executeSideEffect(self: *Runner, unit: lish.exec.Unit) void {
         var env = lish.Env{
             .registry = self.registry,
             .allocator = self.eval_arena.allocator(),
         };
-        _ = env.processExpression(expr, self.scope) catch |err| {
+        const frame = env.enterUnit(unit.unit_id, unit.site_count) catch {
+            self.render_target.reportError("out of memory");
+            return;
+        };
+        defer env.exitUnit(frame);
+        _ = env.processExpression(unit.root, self.scope) catch |err| {
             const message = switch (err) {
                 error.RuntimeError => if (env.runtime_error) |re| re.message else "unknown error",
                 error.OutOfMemory => "out of memory",
@@ -408,13 +413,18 @@ pub const Runner = struct {
         };
     }
 
-    fn evaluateToString(self: *Runner, expr: lish.exec.Expression) []const u8 {
+    fn evaluateToString(self: *Runner, unit: lish.exec.Unit) []const u8 {
         const eval_alloc = self.eval_arena.allocator();
         var env = lish.Env{
             .registry = self.registry,
             .allocator = eval_alloc,
         };
-        const result = env.processExpression(expr, self.scope) catch |err| {
+        const frame = env.enterUnit(unit.unit_id, unit.site_count) catch {
+            self.render_target.reportError("out of memory");
+            return "";
+        };
+        defer env.exitUnit(frame);
+        const result = env.processExpression(unit.root, self.scope) catch |err| {
             const message = switch (err) {
                 error.RuntimeError => if (env.runtime_error) |re| re.message else "unknown error",
                 error.OutOfMemory => "out of memory",
@@ -531,6 +541,7 @@ test "loadScene returns false for unknown scene" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
 
@@ -546,6 +557,7 @@ test "advance emits text character by character" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     // 1 char per second → ms_per_char = 1000ms; advance(1000) emits exactly 1 char
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
@@ -570,6 +582,7 @@ test "advance completes section and enters waiting state" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
 
@@ -589,6 +602,7 @@ test "instant_string emits all at once" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     // Very slow typewriter — instant_string should bypass it entirely
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 0.001 }, std.testing.allocator);
     defer runner.deinit();
@@ -609,6 +623,7 @@ test "char_string always typewriter even in instant_mode" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
 
@@ -635,6 +650,7 @@ test "confirm advances to next section and clears" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
     defer runner.deinit();
 
@@ -659,6 +675,7 @@ test "confirm with confirm_skips flushes remaining text" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0, .confirm_skips = true }, std.testing.allocator);
     defer runner.deinit();
 
@@ -682,6 +699,7 @@ test "confirm without confirm_skips does not flush" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0, .confirm_skips = false }, std.testing.allocator);
     defer runner.deinit();
 
@@ -704,6 +722,7 @@ test "last section confirm results in done" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
 
@@ -742,7 +761,7 @@ test "lish_inline fires between preceding and following text" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = .none }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
@@ -775,7 +794,7 @@ test "lish_inline at beat end fires when waiting state begins" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = .none }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
@@ -801,7 +820,7 @@ test "lish_defer does not fire during advance, fires on confirm" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = .none }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{ .chars_per_sec = 1.0 }, std.testing.allocator);
@@ -833,7 +852,7 @@ test "lish_defer fires in declaration order" {
     try registry.registerOperation(
         std.testing.allocator,
         "ping",
-        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = "$none" }, .description = "Test op: count how many times it fires." }),
+        lish.Operation.fromBoundFn(FireCounter, FireCounter.inc, &counter, .{ .signature = .{ .returns = .none }, .description = "Test op: count how many times it fires." }),
     );
 
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
@@ -858,6 +877,7 @@ test "lish_inline runtime error is reported" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
     _ = runner.loadScene("main");
@@ -875,6 +895,7 @@ test "lish_defer runtime error is reported on confirm" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
     _ = runner.loadScene("main");
@@ -896,6 +917,7 @@ test "instant_lish runtime error is reported and output is empty" {
     defer target.deinit();
 
     var registry = lish.Registry.init(std.testing.allocator);
+    defer registry.deinit(std.testing.allocator);
     var runner = Runner.init(&prog, &registry, &lish.Scope.EMPTY, target.renderTarget(), .{}, std.testing.allocator);
     defer runner.deinit();
     _ = runner.loadScene("main");

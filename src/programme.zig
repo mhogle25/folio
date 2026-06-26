@@ -9,10 +9,10 @@ pub const ProgrammeNode = union(enum) {
     text: []const u8,
     char_string: []const u8,
     instant_string: []const u8,
-    lish_inline: lish.exec.Expression,
-    lish_defer: lish.exec.Expression,
-    instant_lish: lish.exec.Expression,
-    char_lish: lish.exec.Expression,
+    lish_inline: lish.exec.Unit,
+    lish_defer: lish.exec.Unit,
+    instant_lish: lish.exec.Unit,
+    char_lish: lish.exec.Unit,
 };
 
 pub const ProgrammeBeat = []const ProgrammeNode;
@@ -222,10 +222,10 @@ fn validateLishNode(
     beat_index: usize,
     node_index: usize,
     node_errors: *std.ArrayListUnmanaged(NodeError),
-) !?lish.exec.Expression {
+) !?lish.exec.Unit {
     const result = try lish.validation.validate(alloc, ast_node);
     switch (result) {
-        .ok => |expression| return expression,
+        .ok => |unit| return unit,
         .err => |validation_errors| {
             const script_errors = try alloc.alloc(ScriptError, validation_errors.len);
             for (validation_errors, 0..) |verr, i| {
