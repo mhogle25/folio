@@ -436,26 +436,59 @@ pub const Runner = struct {
         return valueToString(value, eval_alloc) catch return "";
     }
 
-    fn valueToString(value: lish.Value, allocator: Allocator) Allocator.Error![]const u8 {
-        return switch (value) {
-            .string => |str| str,
-            .int => |n| std.fmt.allocPrint(allocator, "{}", .{n}),
-            .float => |f| std.fmt.allocPrint(allocator, "{d}", .{f}),
-            .list => |items| blk: {
-                if (items.len == 0) break :blk "";
-                var buf: std.ArrayListUnmanaged(u8) = .empty;
-                var first = true;
-                for (items) |maybe_item| {
-                    const item = maybe_item orelse continue;
-                    if (!first) try buf.append(allocator, ' ');
-                    first = false;
-                    const item_str = try valueToString(item, allocator);
-                    try buf.appendSlice(allocator, item_str);
-                }
-                break :blk buf.items;
-            },
+};
+
+fn valueToString(value: lish.Value, allocator: Allocator) Allocator.Error![]const u8 {
+    return switch (value) {
+        .string => |str| str,
+        .int => |n| std.fmt.allocPrint(allocator, "{}", .{n}),
+        .float => |f| std.fmt.allocPrint(allocator, "{d}", .{f}),
+        .list => |items| listToText(items, allocator),
+    };
+}
+
+/// Join every non-list leaf under `items` with single spaces, in order.
+/// Walks with an index-frame stack, so nesting depth is unbounded (no native
+/// recursion to overflow).
+fn listToText(items: []const ?lish.Value, allocator: Allocator) Allocator.Error![]const u8 {
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
+
+    var stack: std.ArrayListUnmanaged(TextFrame) = .empty;
+    defer stack.deinit(allocator);
+    try stack.append(allocator, .{ .items = items });
+
+    while (stack.items.len > 0) {
+        const frame = &stack.items[stack.items.len - 1];
+        if (frame.index >= frame.items.len) {
+            _ = stack.pop();
+            continue;
+        }
+
+        const item = frame.items[frame.index] orelse {
+            frame.index += 1;
+            continue;
         };
+        frame.index += 1;
+
+        if (frame.emitted_any) try buf.append(allocator, ' ');
+        frame.emitted_any = true;
+
+        // Appending may grow the stack and move `frame`; it is not read again
+        // this iteration.
+        if (item == .list) {
+            try stack.append(allocator, .{ .items = item.list });
+        } else {
+            try buf.appendSlice(allocator, try valueToString(item, allocator));
+        }
     }
+
+    return buf.items;
+}
+
+const TextFrame = struct {
+    items: []const ?lish.Value,
+    index: usize = 0,
+    emitted_any: bool = false,
 };
 
 
@@ -1020,4 +1053,38 @@ test "loadScene resets confirm_skips to configured default" {
     // Loading a new scene resets to the configured default (true)
     _ = runner.loadScene("other");
     try std.testing.expect(runner.config.confirm_skips);
+}
+
+test "valueToString joins nested leaves with spaces" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const inner = try alloc.alloc(?lish.Value, 2);
+    inner[0] = .{ .int = 2 };
+    inner[1] = .{ .int = 3 };
+    const outer = try alloc.alloc(?lish.Value, 3);
+    outer[0] = .{ .int = 1 };
+    outer[1] = .{ .list = inner };
+    outer[2] = .{ .int = 4 };
+
+    const text = try valueToString(.{ .list = outer }, alloc);
+    try std.testing.expectEqualStrings("1 2 3 4", text);
+}
+
+test "valueToString handles deep nesting without native recursion" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    // A chain this deep overflows the native stack if the walk recurses.
+    var deep: lish.Value = .{ .int = 7 };
+    for (0..100_000) |_| {
+        const items = try alloc.alloc(?lish.Value, 1);
+        items[0] = deep;
+        deep = .{ .list = items };
+    }
+
+    const text = try valueToString(deep, alloc);
+    try std.testing.expectEqualStrings("7", text);
 }
